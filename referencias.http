@@ -1,0 +1,17 @@
+###
+
+GET http://localhost:3000/denuncias/2
+
+
+###
+
+POST http://localhost:3000/usuarios
+Content-Type: application/json
+
+{
+    "nome": "Pedro",
+    "senha": "123",
+    "email": "pedro@gmail.com",
+    "cpf": "888.777.444-33",
+    "denuncia": ""
+}

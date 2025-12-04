@@ -35,7 +35,7 @@ server.get('/usuarios', async (req, reply) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-    const allowedOrder = ['id', 'nome', 'email', 'cpf']
+    const allowedOrder = ['id', 'nome', 'email', 'telefone']
     const sort = allowedOrder.includes(req.query.sort) ? req.query.sort : 'id';
     const order = req.query.order === 'desc' ? "DESC" : "ASC"
 
@@ -52,11 +52,11 @@ server.get('/usuarios', async (req, reply) => {
 
 server.put('/usuarios/:id', async (req, reply) => {
     const id = req.params.id;
-    const { nome, senha, email, telefone, ativo } = req.body
+    const { nome, senha, email, telefone } = req.body
     try {
         const resultado = await pool.query(
-            'UPDATE usuarios SET nome=$1, senha=$2, email=$3, cpf=$4, WHERE id=$5 RETURNING *',
-            [nome, senha, email, cpf, id]
+            'UPDATE usuarios SET nome=$1, senha=$2, email=$3, telefone=$4 WHERE id=$5 RETURNING *',
+            [nome, senha, email, telefone, id]
         );
 
         if (resultado.rows.length === 0) {
@@ -71,43 +71,90 @@ server.put('/usuarios/:id', async (req, reply) => {
 
 server.delete('/usuarios/:id', async (req, reply) => {
     const id = req.params.id;
+
     try {
-        await pool.query(
-            'Delete from usuarios where id=$1',
-            [id]
-        )
-        reply.send({mensagem: "Deu certo!"})
+        // PASSO 1: Primeiro apaga as denúncias desse usuário
+        // (Verifique se no seu banco a coluna chama 'usuario_id' mesmo)
+        await pool.query('DELETE FROM denuncias WHERE usuario_id = $1', [id]);
+
+        // PASSO 2: Agora apaga o usuário
+        const resultado = await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
+
+        // Verifica se deletou algo
+        if (resultado.rowCount === 0) {
+            return reply.status(404).send({ error: "Usuário não encontrado" });
+        }
+
+        return reply.send({ mensagem: "Usuário e suas denúncias foram deletados!" });
+
     } catch (err) {
-        reply.status(500).send({ error: err.message })
+        console.error(err);
+        return reply.status(500).send({ error: "Erro ao deletar: " + err.message });
     }
-})
+});
 
 server.post('/usuarios', async (req, reply) => {
     const { nome, senha, email, telefone } = req.body;
 
     try {
+        // AQUI ESTAVA O ERRO: Removi a coluna 'denuncia' e o valor vazio ''
+        // Agora ele só insere o que realmente existe na tabela
         const resultado = await pool.query(
-            'INSERT INTO USUARIOS (nome, senha, email, cpf) VALUES ($1, $2, $3, $4) RETURNING *',
+            `INSERT INTO usuarios (nome, senha, email, telefone) 
+             VALUES ($1, $2, $3, $4) RETURNING *`,
             [nome, senha, email, telefone]
         )
-        reply.status(200).send(resultado.rows[0])
+        reply.status(201).send(resultado.rows[0])
     } catch (e) {
+        console.error("ERRO:", e.message); 
         reply.status(500).send({ error: e.message })
     }
 })
 
 
-server.get('/denuncias/:id', async (req, reply) => {
+
+server.post('/denuncias', async (req, reply) => {
+    const { usuario_id, texto } = req.body;
+
+    try {
+        const resultado = await pool.query(
+            'INSERT INTO denuncias (usuario_id, texto) VALUES ($1, $2) RETURNING *',
+            [usuario_id, texto]
+        );
+        reply.status(201).send(resultado.rows[0]);
+    } catch (err) {
+        reply.status(500).send({ error: err.message });
+    }
+});
+
+
+server.get('/denuncias/usuario/:id', async (req, reply) => {
     const id = req.params.id;
     try {
-        const resultado = await pool.query('SELECT denuncia FROM usuarios where id = $1', [id])
-        
-        reply.status(200).send({data: resultado.rows[0] })
-
+        const resultado = await pool.query(
+            'SELECT * FROM denuncias WHERE usuario_id = $1 ORDER BY id DESC', 
+            [id]
+        )
+        reply.status(200).send({ data: resultado.rows }); 
     } catch (err) {
-        reply.status(500).send({ error: err.message })
+        reply.status(500).send({ error: err.message });
     }
-})
+});
+
+server.delete('/denuncias/:id', async (req, reply) => {
+    const id = req.params.id;
+    try {
+        const resultado = await pool.query('DELETE FROM denuncias WHERE id = $1', [id]);
+        
+        if (resultado.rowCount === 0) {
+            return reply.status(404).send({ error: "Denúncia não encontrada" });
+        }
+        
+        return reply.send({ message: "Denúncia deletada com sucesso" });
+    } catch (err) {
+        return reply.status(500).send({ error: err.message });
+    }
+});
 
 server.listen({
     port: 3000,

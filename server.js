@@ -9,12 +9,6 @@ const { Pool } = pkg;
 
 
 
-
-//vai ter cpf, senha, denuncia vinculada, tudo em string 
-
-
-
-
 const pool = new Pool({
     user: 'local',
     host: 'localhost',
@@ -73,14 +67,10 @@ server.delete('/usuarios/:id', async (req, reply) => {
     const id = req.params.id;
 
     try {
-        // PASSO 1: Primeiro apaga as denúncias desse usuário
-        // (Verifique se no seu banco a coluna chama 'usuario_id' mesmo)
         await pool.query('DELETE FROM denuncias WHERE usuario_id = $1', [id]);
 
-        // PASSO 2: Agora apaga o usuário
         const resultado = await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
 
-        // Verifica se deletou algo
         if (resultado.rowCount === 0) {
             return reply.status(404).send({ error: "Usuário não encontrado" });
         }
@@ -97,8 +87,6 @@ server.post('/usuarios', async (req, reply) => {
     const { nome, senha, email, telefone } = req.body;
 
     try {
-        // AQUI ESTAVA O ERRO: Removi a coluna 'denuncia' e o valor vazio ''
-        // Agora ele só insere o que realmente existe na tabela
         const resultado = await pool.query(
             `INSERT INTO usuarios (nome, senha, email, telefone) 
              VALUES ($1, $2, $3, $4) RETURNING *`,
